@@ -132,9 +132,9 @@ public class Pairer {
         if (scanner == null) { log("ERROR no BLE scanner"); System.exit(1); }
         ScanSettings st = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
         scanner.startScan(null, st, cb);
-        log("SCANNING " + seconds + "s — kumandayı eşleme moduna al (Home + Menü ☰ tuşlarına birlikte basılı tut)");
+        log("SCANNING " + seconds + "s — put the remote in pairing mode (hold Home + Menu ☰ together)");
         h.postDelayed(() -> {
-            if (!found) { stopScan(); log("ERROR kumanda bulunamadı (" + seen.size() + " başka BLE cihazı görüldü)"); System.exit(1); }
+            if (!found) { stopScan(); log("ERROR remote not found (" + seen.size() + " other BLE devices seen)"); System.exit(1); }
         }, seconds * 1000L);
         Looper.loop();
     }

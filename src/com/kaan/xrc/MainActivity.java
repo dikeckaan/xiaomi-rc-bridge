@@ -35,21 +35,21 @@ public class MainActivity extends Activity {
         status.setTextSize(20);
         status.setPadding(0, 16, 0, 16);
         status.setTextColor(Color.LTGRAY);
-        status.setText("Durum kontrol ediliyor…");
+        status.setText("Checking status…");
         root.addView(status);
 
         LinearLayout buttons = new LinearLayout(this);
         Button start = new Button(this);
-        start.setText("Başlat / Yeniden başlat");
-        start.setOnClickListener(v -> runAsync(Bridge.startCmd(true), "Başlatılıyor…"));
+        start.setText("Start / Restart");
+        start.setOnClickListener(v -> runAsync(Bridge.startCmd(true), "Starting…"));
         Button stop = new Button(this);
-        stop.setText("Durdur");
-        stop.setOnClickListener(v -> runAsync(Bridge.stopCmd() + "; echo stopped", "Durduruluyor…"));
+        stop.setText("Stop");
+        stop.setOnClickListener(v -> runAsync(Bridge.stopCmd() + "; echo stopped", "Stopping…"));
         Button refresh = new Button(this);
-        refresh.setText("Yenile");
+        refresh.setText("Refresh");
         refresh.setOnClickListener(v -> refresh());
         Button pair = new Button(this);
-        pair.setText("Kumandayı eşle");
+        pair.setText("Pair remote");
         pair.setOnClickListener(v -> startPairing());
         buttons.addView(pair);
         buttons.addView(start);
@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         // ensures adb is authorized and the daemon is up (no-op if already running)
-        runAsync(Bridge.startCmd(false), "adb'ye bağlanılıyor…");
+        runAsync(Bridge.startCmd(false), "Connecting to adb…");
     }
 
     void runAsync(String cmd, String msg) {
@@ -85,11 +85,11 @@ public class MainActivity extends Activity {
             try {
                 Bridge.run(this, cmd);
             } catch (AdbClient.AuthPendingException e) {
-                err = "TV ekranındaki 'Hata ayıklamaya izin verilsin mi?' penceresinde\n"
-                        + "'Her zaman izin ver' kutusunu işaretleyip İzin ver'e basın, sonra Yenile.";
+                err = "On the TV's 'Allow USB debugging?' dialog, tick\n"
+                        + "'Always allow' and press Allow, then Refresh.";
             } catch (Exception e) {
-                err = "adb'ye bağlanılamadı (127.0.0.1:5555): " + e.getMessage()
-                        + "\nGeliştirici seçeneklerinde ağ hata ayıklamanın açık olduğundan emin olun.";
+                err = "Cannot connect to adb (127.0.0.1:5555): " + e.getMessage()
+                        + "\nMake sure network debugging is enabled in Developer options.";
             }
             busy = false;
             if (err != null) {
@@ -105,8 +105,8 @@ public class MainActivity extends Activity {
         if (busy) return;
         busy = true;
         status.setTextColor(Color.rgb(120, 180, 255));
-        status.setText("Kumanda aranıyor… Kumandayı TV'ye yaklaştırıp Home + Menü (☰) tuşlarına\n"
-                + "birlikte basılı tutun, ışık yanıp sönmeye başlayınca bırakın.");
+        status.setText("Searching for the remote… Hold it close to the TV and press and hold\n"
+                + "Home + Menu (☰) together; release when the light starts blinking.");
         new Thread(() -> {
             try {
                 Bridge.run(this, Bridge.pairCmd());
@@ -122,15 +122,15 @@ public class MainActivity extends Activity {
                 ui.post(() -> {
                     if (o.contains("PAIRED")) {
                         status.setTextColor(Color.rgb(90, 220, 120));
-                        status.setText("✓ Kumanda eşlendi, köprü yeniden başlatıldı. Tuşlara basabilirsiniz.");
+                        status.setText("✓ Remote paired, bridge restarted. The buttons should work now.");
                     } else {
                         status.setTextColor(Color.rgb(255, 90, 90));
-                        status.setText("Eşleme başarısız. Kumandayı yaklaştırıp tekrar deneyin\n"
-                                + "(Home + Menü olmazsa Home + Geri tuşlarını deneyin).");
+                        status.setText("Pairing failed. Bring the remote closer and try again\n"
+                                + "(if Home + Menu does not work, try Home + Back).");
                     }
                 });
             } catch (Exception e) {
-                ui.post(() -> status.setText("Hata: " + e.getMessage()));
+                ui.post(() -> status.setText("Error: " + e.getMessage()));
             }
             busy = false;
             ui.postDelayed(this::refresh, 4000);
@@ -145,11 +145,11 @@ public class MainActivity extends Activity {
                 String log = out.substring(out.indexOf('\n') + 1);
                 ui.post(() -> {
                     status.setTextColor(running ? Color.rgb(90, 220, 120) : Color.rgb(255, 90, 90));
-                    status.setText(running ? "● Köprü çalışıyor — kumanda tuşları aktarılıyor" : "● Köprü durdu");
+                    status.setText(running ? "● Bridge running — remote keys are forwarded" : "● Bridge stopped");
                     logView.setText(log);
                 });
             } catch (Exception e) {
-                ui.post(() -> status.setText("Durum alınamadı: " + e.getMessage()));
+                ui.post(() -> status.setText("Cannot get status: " + e.getMessage()));
             }
         }).start();
     }
