@@ -1,6 +1,15 @@
 package com.kaan.xrc;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ComponentName;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -13,6 +22,8 @@ import android.widget.TextView;
 /** Status screen: shows whether the bridge daemon runs, its recent log, and start/stop buttons. */
 public class MainActivity extends Activity {
     private TextView status, logView;
+    private Button netflixBtn, primeBtn;
+    static final int BIT_NETFLIX = 10, BIT_PRIME = 13;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private volatile boolean busy;
 
@@ -56,6 +67,17 @@ public class MainActivity extends Activity {
         buttons.addView(stop);
         buttons.addView(refresh);
         root.addView(buttons);
+
+        LinearLayout appButtons = new LinearLayout(this);
+        appButtons.setPadding(0, 16, 0, 0);
+        netflixBtn = new Button(this);
+        netflixBtn.setOnClickListener(v -> pickApp(BIT_NETFLIX, "Netflix button", "Netflix"));
+        primeBtn = new Button(this);
+        primeBtn.setOnClickListener(v -> pickApp(BIT_PRIME, "Prime Video button", "Prime Video"));
+        appButtons.addView(netflixBtn);
+        appButtons.addView(primeBtn);
+        root.addView(appButtons);
+        showAppButtons(null);
 
         logView = new TextView(this);
         logView.setTextSize(13);
@@ -137,9 +159,90 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /** Launchable apps: label -> "package/activity" (TV launcher entry preferred). */
+    Map<String, String> launchableApps() {
+        PackageManager pm = getPackageManager();
+        Map<String, String> byPkg = new LinkedHashMap<>();
+        Map<String, String> labels = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (String cat : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
+            Intent i = new Intent(Intent.ACTION_MAIN).addCategory(cat);
+            for (ResolveInfo r : pm.queryIntentActivities(i, 0)) {
+                String pkg = r.activityInfo.packageName;
+                if (pkg.equals(getPackageName()) || byPkg.containsKey(pkg)) continue;
+                String comp = pkg + "/" + r.activityInfo.name;
+                byPkg.put(pkg, comp);
+                String label = r.loadLabel(pm).toString();
+                if (labels.containsKey(label)) label += " (" + pkg + ")";
+                labels.put(label, comp);
+            }
+        }
+        return labels;
+    }
+
+    String labelFor(String target) {
+        if (target == null) return null;
+        String pkg = target.contains("/") ? target.substring(0, target.indexOf('/')) : target;
+        try {
+            PackageManager pm = getPackageManager();
+            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+        } catch (Exception e) {
+            return pkg;
+        }
+    }
+
+    /** keymap file content -> button captions */
+    void showAppButtons(String keymap) {
+        String nf = null, pv = null;
+        if (keymap != null) {
+            for (String line : keymap.split("\n")) {
+                line = line.trim();
+                if (line.startsWith(BIT_NETFLIX + "=app:")) nf = line.substring(line.indexOf(':') + 1);
+                if (line.startsWith(BIT_PRIME + "=app:")) pv = line.substring(line.indexOf(':') + 1);
+            }
+        }
+        netflixBtn.setText("Netflix button → " + (nf != null ? labelFor(nf) : "Netflix (default)"));
+        primeBtn.setText("Prime button → " + (pv != null ? labelFor(pv) : "Prime Video (default)"));
+    }
+
+    void pickApp(int bit, String title, String defaultName) {
+        Map<String, String> apps = launchableApps();
+        List<String> names = new ArrayList<>();
+        List<String> targets = new ArrayList<>();
+        names.add("↺ Default (" + defaultName + ")");
+        targets.add(null);
+        for (Map.Entry<String, String> e : apps.entrySet()) {
+            names.add(e.getKey());
+            targets.add(e.getValue());
+        }
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(title + " opens…")
+                .setItems(names.toArray(new String[0]), (d, which) -> saveApp(bit, targets.get(which), names.get(which)))
+                .show();
+    }
+
+    void saveApp(int bit, String target, String name) {
+        status.setTextColor(Color.LTGRAY);
+        status.setText("Saving…");
+        new Thread(() -> {
+            try {
+                Bridge.run(this, Bridge.setAppCmd(bit, target));
+                String km = Bridge.run(this, Bridge.readKeymapCmd());
+                ui.post(() -> {
+                    showAppButtons(km);
+                    status.setTextColor(Color.rgb(90, 220, 120));
+                    status.setText("✓ Saved: button now opens " + name.replace("↺ ", "") + " (active immediately)");
+                });
+            } catch (Exception e) {
+                ui.post(() -> status.setText("Cannot save: " + e.getMessage()));
+            }
+        }).start();
+    }
+
     void refresh() {
         new Thread(() -> {
             try {
+                String km = Bridge.run(this, Bridge.readKeymapCmd());
+                ui.post(() -> showAppButtons(km));
                 String out = Bridge.run(this, Bridge.statusCmd());
                 boolean running = out.startsWith("RUNNING");
                 String log = out.substring(out.indexOf('\n') + 1);

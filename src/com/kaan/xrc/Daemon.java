@@ -57,7 +57,8 @@ public class Daemon {
      * 11 0x6A 12 0x6B 13 0x6C 14 AL_0x18A 15 AL_0x192 16 AL_0x194 17 Voice 18 AC_Home 19 AC_Back
      * 20 AC_Forward 21 AC_Stop 22 AC_Refresh 23 AC_Bookmarks
      */
-    static final int[] keymap = {
+    static final int[] keymap = new int[24];
+    static final int[] DEFAULT_KEYMAP = {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_POWER,
             KeyEvent.KEYCODE_SEARCH, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
@@ -67,9 +68,12 @@ public class Daemon {
             KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_FORWARD,
             KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_REFRESH, KeyEvent.KEYCODE_BOOKMARK,
     };
-    /** bits that launch an app instead of sending a key (package name, LEANBACK launcher) */
+    /** bits that launch an app instead of sending a key: "package" or "package/activity" */
     static final String[] apps = new String[24];
-    static {
+
+    static void resetKeymap() {
+        System.arraycopy(DEFAULT_KEYMAP, 0, keymap, 0, 24);
+        java.util.Arrays.fill(apps, null);
         apps[10] = "com.netflix.ninja";                  // Netflix button
         apps[13] = "com.amazon.amazonvideo.livingroom";  // Prime Video button
     }
@@ -127,6 +131,7 @@ public class Daemon {
 
     static void onReport(byte[] v) {
         if (v == null || v.length < 3) return;
+        reloadKeymapIfChanged();
         int now = (v[0] & 0xff) | (v[1] & 0xff) << 8 | (v[2] & 0xff) << 16;
         int changed = now ^ pressed;
         for (int bit = 0; bit < 24; bit++) {
@@ -152,16 +157,18 @@ public class Daemon {
         pressed = now;
     }
 
-    static void launch(String pkg) {
+    static void launch(String target) {
         new Thread(() -> {
             try {
-                java.lang.Process p = Runtime.getRuntime().exec(new String[]{"am", "start",
-                        "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LEANBACK_LAUNCHER",
-                        "-f", "0x10200000", "-p", pkg});
+                String[] cmd = target.contains("/")
+                        ? new String[]{"am", "start", "-a", "android.intent.action.MAIN", "-f", "0x10200000", "-n", target}
+                        : new String[]{"am", "start", "-a", "android.intent.action.MAIN",
+                                "-c", "android.intent.category.LEANBACK_LAUNCHER", "-f", "0x10200000", "-p", target};
+                java.lang.Process p = Runtime.getRuntime().exec(cmd);
                 p.waitFor();
-                log("launched " + pkg + " exit=" + p.exitValue());
+                log("launched " + target + " exit=" + p.exitValue());
             } catch (Exception e) {
-                log("launch failed " + pkg + ": " + e);
+                log("launch failed " + target + ": " + e);
             }
         }).start();
     }
@@ -187,8 +194,19 @@ public class Daemon {
         }
     }
 
-    static void loadKeymap() {
+    static long keymapStamp = -1;
+
+    /** cheap stat on every report: picks up changes made from the app UI without a restart */
+    static void reloadKeymapIfChanged() {
         File f = new File(KEYMAP_FILE);
+        long stamp = f.exists() ? f.lastModified() ^ f.length() : 0;
+        if (stamp != keymapStamp) loadKeymap();
+    }
+
+    static void loadKeymap() {
+        resetKeymap();
+        File f = new File(KEYMAP_FILE);
+        keymapStamp = f.exists() ? f.lastModified() ^ f.length() : 0;
         if (!f.exists()) return;
         try (BufferedReader r = new BufferedReader(new FileReader(f))) {
             String line;

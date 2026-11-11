@@ -48,6 +48,21 @@ public class Bridge {
                 + "' > /dev/null 2>&1 < /dev/null & sleep 1; echo pairing";
     }
 
+    static final String KEYMAP = "/data/local/tmp/xrc-keymap.txt";
+
+    static String readKeymapCmd() {
+        return "cat " + KEYMAP + " 2>/dev/null";
+    }
+
+    /** Replace the line for one button bit; target null = back to the default. The daemon hot-reloads the file. */
+    static String setAppCmd(int bit, String target) {
+        if (target != null && !target.matches("[A-Za-z0-9_.$/]+")) throw new IllegalArgumentException(target);
+        String f = KEYMAP;
+        return "touch " + f + "; grep -v '^" + bit + "=' " + f + " > " + f + ".tmp; "
+                + (target != null ? "echo '" + bit + "=app:" + target + "' >> " + f + ".tmp; " : "")
+                + "mv " + f + ".tmp " + f + "; echo ok";
+    }
+
     static String pairLogCmd() {
         return "cat " + PAIR_LOG + " 2>/dev/null";
     }

@@ -14,6 +14,7 @@ On some Android TV boxes (e.g. the Skyworth **TVPLUS BOX**, Android 14) the Xiao
 - [Installation](#installation)
 - [Pairing the remote](#pairing-the-remote)
 - [Key mapping](#key-mapping)
+- [Choosing apps for the Netflix / Prime buttons](#choosing-apps-for-the-netflix--prime-buttons)
 - [Custom key mapping](#custom-key-mapping)
 - [Start on boot](#start-on-boot)
 - [Power-button long press → power menu](#power-button-long-press--power-menu)
@@ -67,7 +68,7 @@ Pairing from the TV's Settings menu often fails too, so the app ships its own pa
 2. Install it on the TV — from a computer:
    ```sh
    adb connect <TV-IP>:5555
-   adb install -r xiaomi-rc-bridge-v0.4.apk
+   adb install -r xiaomi-rc-bridge-v0.5.apk
    ```
    or via a USB stick / "Send Files to TV".
 3. Open **Xiaomi RC Bridge** on the TV.
@@ -116,6 +117,10 @@ Report ID 1 is a 24-bit bitmap. Default mapping:
 
 D-pad and volume keys repeat after 400 ms, then every 80 ms while held.
 
+## Choosing apps for the Netflix / Prime buttons
+
+In the app, press **Netflix button → …** or **Prime button → …** and pick any installed app from the list (or **Default** to go back). The change is active immediately — no restart needed. The choice is stored in `/data/local/tmp/xrc-keymap.txt` as `10=app:package/activity` (Netflix) and `13=app:package/activity` (Prime).
+
 ## Custom key mapping
 
 Create `/data/local/tmp/xrc-keymap.txt` (one `bit=KEYCODE` or `bit=app:package.name` per line):
@@ -123,7 +128,7 @@ Create `/data/local/tmp/xrc-keymap.txt` (one `bit=KEYCODE` or `bit=app:package.n
 ```text
 # Menu button opens Settings
 9=SETTINGS
-# Netflix button opens YouTube
+# Netflix button opens YouTube (package, or package/activity)
 10=app:com.google.android.youtube.tv
 # Prime button becomes play/pause
 13=MEDIA_PLAY_PAUSE
@@ -133,7 +138,7 @@ Create `/data/local/tmp/xrc-keymap.txt` (one `bit=KEYCODE` or `bit=app:package.n
 adb push xrc-keymap.txt /data/local/tmp/
 ```
 
-Then press **Start / Restart** in the app. Key names are Android `KeyEvent.KEYCODE_*` names (the `KEYCODE_` prefix is optional).
+The daemon reloads the file automatically on the next key press. Key names are Android `KeyEvent.KEYCODE_*` names (the `KEYCODE_` prefix is optional).
 
 ## Start on boot
 

@@ -10,7 +10,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 rm -rf build && mkdir -p build/classes build/dex
 $BT/aapt2 link -o build/base.apk -I $PLAT --manifest AndroidManifest.xml --min-sdk-version 31 --target-sdk-version 34
-javac -source 11 -target 11 -nowarn -classpath $PLAT -d build/classes $(find src -name '*.java') 2>&1 | grep -v "warning" || true
+javac -source 11 -target 11 -nowarn -classpath $PLAT -d build/classes $(find src -name '*.java')
 $BT/d8 --min-api 31 --lib $PLAT --output build/dex $(find build/classes -name '*.class')
 cp build/base.apk build/unsigned.apk
 (cd build/dex && zip -q ../unsigned.apk classes.dex)
